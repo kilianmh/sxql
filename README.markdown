@@ -144,8 +144,20 @@ Creates a SELECT query. It takes a field (or a list of fields) and SQL Clauses.
                      :not-null t
                      :default "None")
      (identifying_color :type '(:char 20)
-                        :unique t)))
-;=> #<SXQL-STATEMENT: CREATE TABLE enemy (name STRING PRIMARY KEY, age INTEGER NOT NULL, address TEXT, fatal_weakness TEXT NOT NULL DEFAULT 'None', identifying_color CHAR(20) UNIQUE)>
+                        :unique t))
+  (constraint :minimum-age :check (:> :age 18))
+  (constraint :weakness-p :foreign-key :fatal_weakness
+			        :references (:weakness-table :weakness-name)))
+;=> #<SXQL-STATEMENT: CREATE TABLE enemy (
+    name STRING PRIMARY KEY,
+    age INTEGER NOT NULL,
+    address TEXT,
+    fatal_weakness TEXT NOT NULL DEFAULT 'None',
+    identifying_color CHAR(20) UNIQUE,
+    CONSTRAINT minimum-age PRIMARY KEY (address),
+    CONSTRAINT weakness-p FOREIGN KEY (fatal_weakness)
+               REFERENCES WEAKNESS-TABLE(weakness-name)
+)>
 
 (yield *)
 ;=> "CREATE TABLE enemy (name STRING PRIMARY KEY, age INTEGER NOT NULL, address TEXT, fatal_weakness TEXT NOT NULL DEFAULT ?, identifying_color CHAR(20) UNIQUE)"

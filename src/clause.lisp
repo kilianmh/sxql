@@ -503,6 +503,85 @@
                                      (cadr args)
                                      (caddr args)))
 
+@export
+(defstruct (constraint-clause (:include sql-clause (name "CONSTRAINT")))
+  constraint-name
+  constraint-type
+  columns-or-check
+  references
+  on-delete
+  on-update)
+
+(defmethod make-clause ((clause-name (eql :constraint))
+			&key constraint-name constraint-type
+			  columns-or-check references on-update on-delete)
+  (ecase constraint-type
+    ((:unique :check :primary-key)
+     (when (or references on-delete on-update)
+       (warn "You can not supply references, on-delete, or on-update without foreign key. The values supplied will be ignored."))
+     (make-constraint-clause
+      :constraint-name (detect-and-convert constraint-name)
+      :constraint-type constraint-type
+      :columns-or-check
+      (if (eq :check constraint-type)
+	  (detect-and-convert columns-or-check)
+	  (if (listp columns-or-check)
+	      (mapcar (function detect-and-convert)
+		      columns-or-check)
+	      (list (detect-and-convert columns-or-check))))))
+    (:foreign-key
+     (unless references
+       (error "You have to supply references with foreign key"))
+     (flet ((convert-delete-update (item)
+	      (ecase item
+		(:no-action "NO ACTION")
+		(:restrict "RESTRICT")
+		(:cascade "CASCADE")
+		(:set-default "SET DEFAULT")
+		(:set-null "SET NULL"))))
+       (make-constraint-clause
+	:constraint-name (detect-and-convert constraint-name)
+	:constraint-type constraint-type
+	:columns-or-check (if (listp columns-or-check)
+			      (mapcar (function detect-and-convert)
+				      columns-or-check)
+			      (list (detect-and-convert columns-or-check)))
+	:references (detect-and-convert references)
+	:on-delete (when on-delete
+		     (make-on-delete-clause :action (convert-delete-update on-delete)))
+	:on-update (when on-update
+		     (make-on-update-clause :action (convert-delete-update on-update))))))))
+
+(defmethod yield ((clause constraint-clause))
+  (let ((columns-or-check
+	  (constraint-clause-columns-or-check clause))
+	(*use-placeholder*
+	  nil))
+    (with-yield-binds
+      (values
+       (format nil "CONSTRAINT ~A ~A"
+               (string-downcase (yield (constraint-clause-constraint-name clause)))
+	       (ecase (constraint-clause-constraint-type clause)
+		 (:primary-key
+		  (format nil "PRIMARY KEY ~A" (yield columns-or-check)))
+		 (:unique
+		  (format nil "UNIQUE ~A" (yield columns-or-check)))
+		 (:foreign-key
+		  (let ((on-delete
+			  (constraint-clause-on-delete clause))
+			(on-update
+			  (constraint-clause-on-update clause)))
+		    (format nil "FOREIGN KEY ~A REFERENCES ~A~@[ ~A~]~@[ ~A~]"
+			    (yield columns-or-check)
+			    (yield (constraint-clause-references clause))
+			    (when on-delete
+			      (yield on-delete))
+			    (when on-update
+			      (yield on-update)))))
+		 (:check
+		  (format nil "CHECK ~A"
+			  (yield columns-or-check)))))))))
+
 (defmethod yield ((clause limit-clause))
   (let ((*use-placeholder* nil))
     (call-next-method)))

@@ -297,6 +297,16 @@
                  :on-update (canonicalize-action on-update))))
 
 @export
+(defun constraint (constraint-name constraint-type columns-or-check &key references on-delete on-update)
+  (make-clause :constraint
+               :constraint-name constraint-name
+               :constraint-type constraint-type
+               :columns-or-check columns-or-check
+               :references references
+               :on-delete on-delete
+               :on-update on-update))
+
+@export
 (defun add-column (column-name &rest args)
   (apply #'make-clause :add-column column-name args))
 
